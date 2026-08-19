@@ -1,0 +1,52 @@
+name: Sync Full IPTV Source
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download latest IPTV source
+        run: |
+          mkdir -p archive
+
+          curl -L \
+            --fail \
+            --retry 5 \
+            --retry-delay 5 \
+            --connect-timeout 20 \
+            --max-time 120 \
+            "https://raw.githubusercontent.com/cs3306/IPTV-Sources/main/data/output/iptv_collection.m3u" \
+            -o archive/iptv_collection.m3u
+
+      - name: Check source
+        run: |
+          test -s archive/iptv_collection.m3u
+          echo "Source size:"
+          wc -c archive/iptv_collection.m3u
+          echo "Channel entries:"
+          grep -c "#EXTINF" archive/iptv_collection.m3u || true
+
+      - name: Commit updated source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add archive/iptv_collection.m3u
+
+          if git diff --cached --quiet; then
+            echo "No changes."
+          else
+            git commit -m "sync: update full IPTV source"
+            git push
+          fi
