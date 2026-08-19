@@ -1,0 +1,51 @@
+name: Build APTV Playlist
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    - cron: "30 */6 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Build playlist
+        run: |
+          python scripts/build_playlist.py
+
+      - name: Check result
+        run: |
+          test -s playlist.m3u
+          echo "Playlist size:"
+          wc -c playlist.m3u
+
+          echo "Channels:"
+          grep -c "#EXTINF" playlist.m3u || true
+
+      - name: Commit playlist
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add playlist.m3u
+
+          if git diff --cached --quiet; then
+            echo "No changes."
+          else
+            git commit -m "build: update APTV playlist"
+            git push
+          fi
