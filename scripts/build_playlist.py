@@ -1,16 +1,8 @@
 import re
-import urllib.request
 from pathlib import Path
 
+INPUT = Path("archive/iptv_collection.m3u")
 OUTPUT = Path("playlist.m3u")
-
-SOURCES = [
-    "https://raw.githubusercontent.com/cs3306/IPTV-Sources/main/data/output/iptv_collection.m3u",
-    "https://raw.githubusercontent.com/Kimentanm/aptv/master/m3u/iptv.m3u",
-    "https://raw.githubusercontent.com/suxuang/myIPTV/main/ipv4.m3u",
-    "https://raw.githubusercontent.com/hujingguang/ChinaIPTV/main/cnTV_AutoUpdate.m3u8",
-    "https://raw.githubusercontent.com/Guovin/iptv-api/gd/output/result.m3u",
-]
 
 GROUPS = [
     "央视",
@@ -29,18 +21,17 @@ BLACKLIST = [
     "教育",
     "培训",
     "课堂",
-    "广告",
-    "宣传片",
-    "点播",
+    "少儿",
+    "春晚",
     "回放",
+    "重播",
+    "点播",
     "录像",
     "历史",
-    "春晚",
     "测试",
+    "广告",
+    "宣传片",
     "MV",
-    "电影",
-    "电视剧",
-    "VOD",
 ]
 
 CITY_KEYWORDS = [
@@ -72,7 +63,7 @@ SATELLITE = [
     "河南卫视",
     "湖北卫视",
     "江西卫视",
-    "福建东南卫视",
+    "东南卫视",
     "广西卫视",
     "云南卫视",
     "贵州卫视",
@@ -90,26 +81,9 @@ SATELLITE = [
     "海南卫视",
 ]
 
-def download(url):
-    try:
-        req = urllib.request.Request(
-            url,
-            headers={"User-Agent": "Mozilla/5.0"}
-        )
-
-        with urllib.request.urlopen(req, timeout=30) as r:
-            return r.read().decode(
-                "utf-8",
-                errors="ignore"
-            )
-
-    except Exception as e:
-        print("源下载失败:", url)
-        print(e)
-        return ""
-
 
 def parse_m3u(text):
+
     lines = text.splitlines()
     result = []
 
@@ -172,7 +146,7 @@ def get_group(name):
     if re.search(r"cctv[- ]?\d+", name, re.I):
         return "央视"
 
-    if "央视" in name or "cgtn" in n:
+    if "央视" in name:
         return "央视"
 
     # 港澳台
@@ -269,42 +243,32 @@ def get_group(name):
 
 def main():
 
-    all_channels = []
+    text = INPUT.read_text(
+        encoding="utf-8",
+        errors="ignore"
+    )
 
-    print("开始下载 IPTV 源...")
+    channels = parse_m3u(text)
 
-    for source in SOURCES:
-
-        print("下载:", source)
-
-        text = download(source)
-
-        if not text:
-            continue
-
-        channels = parse_m3u(text)
-
-        print("发现频道:", len(channels))
-
-        all_channels.extend(channels)
-
-    print("全部候选频道:", len(all_channels))
+    print("原始频道:", len(channels))
 
     grouped = {
         group: []
         for group in GROUPS
     }
 
-    # 同频道聚合
-    candidates = {}
+    seen = set()
 
-    for channel in all_channels:
+    for channel in channels:
 
-        name = normalize_name(channel["name"])
+        name = normalize_name(
+            channel["name"]
+        )
 
         if not name:
             continue
 
+        # 黑名单过滤
         if any(
             word.lower() in name.lower()
             for word in BLACKLIST
@@ -316,27 +280,26 @@ def main():
         if not group:
             continue
 
-        key = re.sub(
-            r"[^a-zA-Z0-9\u4e00-\u9fff]",
-            "",
-            name
-        ).lower()
-
-        if key not in candidates:
-            candidates[key] = {
-                "name": name,
-                "group": group,
-                "channels": []
-            }
-
-        candidates[key]["channels"].append(channel)
-
-    # 每个频道选择第一个候选地址
-    for item in candidates.values():
-
-        grouped[item["group"]].append(
-            item["channels"][0]
+        # 简单去重
+        key = (
+            group,
+            re.sub(
+                r"[^a-zA-Z0-9\u4e00-\u9fff]",
+                "",
+                name
+            ).lower()
         )
+
+        if key in seen:
+            continue
+
+        seen.add(key)
+
+        grouped[group].append({
+            "info": channel["info"],
+            "name": name,
+            "url": channel["url"]
+        })
 
     output = [
         '#EXTM3U x-tvg-url="https://epg.aptv.app/pp.xml.gz,https://epg.aptv.app/xml"',
@@ -344,23 +307,31 @@ def main():
         "#EXT-X-APTV-TYPE remote",
     ]
 
+    total = 0
+
+    print()
+    print("频道统计:")
+
     for group in GROUPS:
 
+        count = len(grouped[group])
+
         print(
-            group,
-            len(grouped[group])
+            f"{group}: {count}"
         )
 
         for channel in grouped[group]:
 
             info = channel["info"]
 
+            # 修改已有 group-title
             info = re.sub(
                 r'group-title="[^"]*"',
                 f'group-title="{group}"',
                 info
             )
 
+            # 没有 group-title 就添加
             if "group-title=" not in info:
 
                 info = info.replace(
@@ -371,17 +342,16 @@ def main():
             output.append(info)
             output.append(channel["url"])
 
+            total += 1
+
     OUTPUT.write_text(
         "\n".join(output) + "\n",
         encoding="utf-8"
     )
 
     print()
-    print("最终频道:", sum(
-        len(v) for v in grouped.values()
-    ))
-
-    print("生成:", OUTPUT)
+    print("最终频道:", total)
+    print("输出文件:", OUTPUT)
 
 
 if __name__ == "__main__":
