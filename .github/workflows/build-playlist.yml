@@ -47,5 +47,6 @@ jobs:
             echo "No changes."
           else
             git commit -m "build: update APTV playlist"
+            git full --rebase origin main
             git push
           fi
