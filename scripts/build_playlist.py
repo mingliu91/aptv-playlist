@@ -3,6 +3,7 @@ from pathlib import Path
 
 INPUT = Path("archive/iptv_collection.m3u")
 OUTPUT = Path("playlist.m3u")
+CCTV_SOURCE = "https://raw.githubusercontent.com/best-fan/iptv-sources/main/cn_cctv.m3u8"
 
 # 最终频道分组顺序
 GROUPS = [
@@ -210,7 +211,11 @@ def main():
         if any(word.lower() in name.lower()
                for word in BLACKLIST):
             continue
-
+        
+        # 央视改用独立央视源，跳过 archive 中的央视
+        if re.search(r"CCTV[- ]?\d+", name, re.I):
+            continue
+       
         group = get_group(name)
 
         if not group:
