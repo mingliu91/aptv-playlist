@@ -1,16 +1,3 @@
-# 读取独立央视源
-    cctv_request = Request(
-        CCTV_SOURCE,
-        headers={"User-Agent": "Mozilla/5.0"}
-    )
-
-    with urlopen(cctv_request, timeout=60) as response:
-        cctv_text = response.read().decode(
-            "utf-8",
-            errors="ignore"
-        )
-
-    cctv_channels = parse_m3u_text(cctv_text)
 import re
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -268,7 +255,7 @@ def main():
 
         # 黑名单
         if any(
-             word.lower() in name.lower()
+            word.lower() in name.lower()
             for word in BLACKLIST
         ):
             continue
@@ -404,5 +391,5 @@ def main():
         print(group, len(result[group]))
 
 
-if name == "__main__":
-    main()       
+if __name__ == "__main__":
+    main()
